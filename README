@@ -1,0 +1,15 @@
+# Amrutam Telemedicine Backend
+
+This repository contains a production-oriented backend service built for Amrutam’s telemedicine platform.  
+The system is designed with a strong focus on scalability, reliability, security, and observability, supporting high-volume medical consultations and role-based user workflows.
+
+The backend is implemented using FastAPI and PostgreSQL with a modular architecture that separates domain logic into independent services. It provides APIs for user lifecycle management, doctor availability scheduling, consultation workflows, and audit logging while following modern backend engineering practices such as containerization, dependency injection, and secure configuration management.
+
+Key goals of this project:
+
+- Support high-scale telemedicine workflows (100k+ daily consultations)
+- Maintain low latency and high availability
+- Implement secure authentication and RBAC foundations
+- Provide observable and maintainable service architecture
+
+This project is part of a backend engineering assessment and demonstrates production-grade system design principles rather than a minimal prototype.
