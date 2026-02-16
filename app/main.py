@@ -1,7 +1,17 @@
 from fastapi import FastAPI
-
+import time
 from app.db.base import Base
 from app.db.session import engine
+from sqlalchemy.exc import OperationalError
+
+from app.modules.audit.router import router as audit_router
+from app.modules.auth.routers import router as auth_router
+from app.modules.users.routers import router as users_router
+from app.modules.availability.routers import router as availability_router
+from app.modules.bookings.routers import router as booking_router
+from app.modules.consultations.routers import router as consultations_router
+from app.modules.prescriptions.routers import router as prescription_router
+
 
 app = FastAPI(title="Amrutam Telemedicine Backend")
 
@@ -9,9 +19,34 @@ app = FastAPI(title="Amrutam Telemedicine Backend")
 # Create tables on startup
 @app.on_event("startup")
 def on_startup():
-    Base.metadata.create_all(bind=engine)
+    retries = 10
+
+    while retries > 0:
+        try:
+            print("Waiting for database...")
+            Base.metadata.create_all(bind=engine)
+            print("Database ready!")
+            break
+        except OperationalError:
+            retries -= 1
+            time.sleep(2)
+
+    if retries == 0:
+        raise Exception("Database not available")
 
 
-@app.get("/")
-def health():
-    return {"status": "ok"}
+# @app.get("/")
+# def health():
+#     return {"status": "ok"}
+
+app.include_router(audit_router)
+app.include_router(auth_router)
+app.include_router(availability_router)
+app.include_router(booking_router)
+app.include_router(consultations_router)
+app.include_router(prescription_router)
+app.include_router(users_router)
+
+
+
+
