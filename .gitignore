@@ -1,15 +1,17 @@
-# Environment variables
-.env
-
 # Python
-.idea/
 __pycache__/
+*.py[cod]
 *.pyc
-.venv/
 
-# Docker
+# Virtual environment
+venv/
+.venv/
+.env
+.idea/
+
+# Logs
 *.log
 
-# VSCode
-.vscode/
-
+# OS
+.DS_Store
+Thumbs.db
