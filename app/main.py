@@ -13,7 +13,7 @@ from app.modules.consultations.routers import router as consultations_router
 from app.modules.prescriptions.routers import router as prescription_router
 
 
-app = FastAPI(title="Amrutam Telemedicine Backend")
+app = FastAPI(title="Telemedicine Backend")
 
 
 # Create tables on startup
