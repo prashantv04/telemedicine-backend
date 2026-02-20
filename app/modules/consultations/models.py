@@ -8,18 +8,45 @@ from app.db.base import Base
 class Consultation(Base):
     __tablename__ = "consultations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(
+        UUID(as_uuid=True), 
+        primary_key=True, 
+        default=uuid.uuid4
+    )
 
-    patient_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
-    doctor_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    patient_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id"), 
+        nullable=False, 
+        index=True
+    )
 
-    slot_id = Column(UUID(as_uuid=True), nullable=False)
+    doctor_id = Column(
+        UUID(as_uuid=True), 
+        ForeignKey("users.id"), 
+        nullable=False, 
+        index=True
+    )
 
-    status = Column(String, default="scheduled", nullable=False)
-    # scheduled | completed | cancelled
+    slot_id = Column(
+        UUID(as_uuid=True), 
+        nullable=False   
+    ) # scheduled | completed | cancelled
+   
+    status = Column(
+        String, default="scheduled", 
+        nullable=False
+    )
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(
+        DateTime(timezone=True), 
+        server_default=func.now()
+    )
+    
+    updated_at = Column(
+        DateTime(timezone=True), 
+        onupdate=func.now()
+    )
 
     __table_args__ = (
         Index("idx_consultation_status", "status"),

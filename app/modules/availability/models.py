@@ -10,7 +10,11 @@ from app.db.base import Base
 class AvailabilitySlot(Base):
     __tablename__ = "availability_slots"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(
+        UUID(as_uuid=True), 
+        primary_key=True, 
+        default=uuid.uuid4
+    )
 
     doctor_id = Column(
         UUID(as_uuid=True),
@@ -19,10 +23,20 @@ class AvailabilitySlot(Base):
         index=True,
     )
 
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    end_time = Column(DateTime(timezone=True), nullable=False)
+    start_time = Column(
+        DateTime(timezone=True), 
+        nullable=False
+    )
 
-    is_booked = Column(Boolean, default=False, nullable=False)
+    end_time = Column(
+        DateTime(timezone=True), 
+        nullable=False
+    )
+
+    is_booked = Column(
+        Boolean, default=False, 
+        nullable=False
+    )
 
     created_at = Column(
         DateTime(timezone=True),
@@ -36,7 +50,7 @@ class AvailabilitySlot(Base):
         onupdate=func.now(),
         nullable=False,
     )
-
+    
     doctor = relationship("User")
 
     __table_args__ = (

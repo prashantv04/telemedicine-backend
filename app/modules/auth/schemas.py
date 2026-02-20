@@ -4,6 +4,7 @@ from enum import Enum
 class Role(str, Enum):
     doctor = "doctor"
     patient = "patient"
+    admin = "admin"
 
 class SignupRequest(BaseModel):
     email: EmailStr

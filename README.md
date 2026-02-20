@@ -1,27 +1,67 @@
 # Telemedicine Backend
 
-Production-grade backend powering a scalable telemedicine platform.
+Production-grade backend powering a high-concurrency telemedicine platform.
 
-This system implements secure, scalable, and transaction-safe telemedicine workflows including authentication, doctor availability management, idempotent booking, consultation lifecycle control, and prescription handling.
+Designed with **transactional correctness, concurrency safety, scalability, and security as first-class concerns** — not as afterthoughts.
 
-Designed with scalability, reliability, security, and observability as first-class concerns.
+---
+
+# 🧠 System Vision
+
+This system models a real-world telemedicine workflow where:
+
+- Doctors expose time-bound availability
+- Patients book consultations
+- State transitions are strictly enforced
+- Prescriptions are issued post-consultation
+- Financial transactions are tracked
+- All operations remain safe under retries and concurrency
+
+The architecture prioritizes:
+
+- Strong consistency over eventual consistency
+- Deterministic booking behavior
+- Database-enforced invariants
+- Stateless horizontal scalability
+
+---
+
+# 🏗 Architecture
+
+## High-Level Flow
+
+Client  
+↓  
+FastAPI (Stateless API Layer)  
+↓  
+PostgreSQL (ACID-compliant transactional store)
+
+### Architectural Principles
+
+- Stateless application layer (horizontal scaling ready)
+- Strict transactional boundaries
+- Idempotent write APIs
+- Row-level locking for conflict prevention
+- Database-enforced integrity
+- Role-based access control (RBAC)
+- Infrastructure-agnostic deployment
 
 ---
 
 # 🚀 Tech Stack
 
-- **Language:** Python 3.11+
-- **Framework:** FastAPI
-- **Database:** PostgreSQL
-- **ORM:** SQLAlchemy
-- **Authentication:** JWT (HS256)
-- **Password Hashing:** bcrypt
-- **Containerization:** Docker + Docker Compose
-- **API Documentation:** OpenAPI (Swagger UI)
+- Python 3.11+
+- FastAPI
+- PostgreSQL
+- SQLAlchemy (2.0 style)
+- JWT (HS256)
+- bcrypt
+- Docker + Docker Compose
+- OpenAPI (Swagger UI)
 
 ---
 
-# 🎯 System Goals
+# 🎯 Performance Targets
 
 | Metric | Target |
 |--------|--------|
@@ -30,143 +70,118 @@ Designed with scalability, reliability, security, and observability as first-cla
 | p95 Write Latency | < 500ms |
 | Availability | 99.95% |
 
----
-
-# 🏗 Architecture Overview
-
-## High-Level Flow
-
-Client  
-↓  
-FastAPI Application (Stateless API Layer)  
-↓  
-PostgreSQL (ACID-compliant transactional store)
-
-### Architectural Principles
-
-- Modular domain-oriented structure
-- Clear separation of concerns
-- Stateless API design
-- Idempotent write operations
-- Transactional correctness
-- DB-enforced invariants
-- Infrastructure-agnostic deployment
+Designed for high booking concurrency during peak consultation windows.
 
 ---
 
-# Core Features
+# 🔐 Security Model
 
-## 1. Authentication & User Lifecycle
-
-- JWT-based authentication
+- Stateless JWT authentication
 - Role-Based Access Control (Admin, Doctor, Patient)
-- Secure password hashing via bcrypt
-- Token-protected endpoints
-- Environment-based secret configuration
+- bcrypt password hashing
+- Strict request validation (Pydantic)
+- Environment-based secret management
+- Parameterized queries via ORM
+- Audit logging for critical operations
+- Database-level double-booking prevention
+- Idempotent write guarantees
+
+Future-ready for:
+
+- Multi-factor authentication (MFA)
+- Key rotation
+- Rate limiting
+- TLS termination
+- Dependency scanning
 
 ---
 
-## 2. Doctor Availability Management
+# 🔄 Idempotent Booking Design
 
-- Time-slot-based availability creation
-- Slot allocation with row-level locking
-- Concurrency-safe booking enforcement
-- Double-booking prevention at database level
+## Problem
 
----
+Network retries must not create duplicate bookings.
 
-## 3. Idempotent Booking System
+Under high concurrency, the system must:
 
-The booking endpoint requires an `idempotency-key` header to guarantee safe retries.
+- Prevent double allocation of slots
+- Return consistent results for repeated requests
 
-### Problem
+## Solution
 
-Network retries or client-side failures must not create duplicate bookings.
+- Mandatory `idempotency-key` header
+- Unique constraint on idempotency keys
+- Row-level locking on availability slots
+- Single-transaction slot allocation
 
-### Solution
+### Guarantee
 
-- Required `idempotency-key` header
-- Unique DB constraint on idempotency key
-- Transaction-level atomic slot allocation
-- Safe under concurrent requests
+Reusing the same `idempotency-key`:
 
-### Behavior
+- Returns the original booking
+- Never allocates a new slot
+- Remains safe under concurrent retries
 
-If the same `idempotency-key` is reused:
-- Returns the previously created booking
-- Prevents duplicate slot allocation
-
-Example:
-
-```http
-POST /bookings/
-idempotency-key: 9f1d2c3b-1234
-
-{
-  "slot_id": 10
-}
-
-```
+This mirrors patterns used in high-scale payment systems.
 
 ---
 
-## 4. Consultation Lifecycle Management
+# 🧵 Concurrency Strategy
 
-### Supported Status Flow
+Booking conflicts are resolved via:
 
+- `SELECT ... FOR UPDATE` row-level locking
+- Unique constraints on slot allocation
+- Atomic transaction boundaries
+
+Why not optimistic locking?
+
+Because under high contention (e.g., popular doctors), deterministic locking ensures correctness without retry storms.
+
+The system prioritizes correctness over premature micro-optimizations.
+
+---
+
+# 📦 Core Domain Modules
+
+## Authentication & Users
+- JWT-based login/signup
+- Role enforcement
+- MFA-ready schema
+
+## Doctor Availability
+- Time-slot-based modeling
+- Conflict-safe allocation
+- Concurrency-safe booking
+
+## Consultations
+Supported state flow:
 - `scheduled`
 - `completed`
 - `cancelled`
 
-### Guarantees
-
-- Only valid state transitions allowed
+Guarantees:
+- Valid transitions only
 - Immutable once completed
-- Transaction-safe updates
-- Role-restricted transitions
+- Role-restricted mutation
 
----
+## Prescriptions
+- Only allowed for completed consultations
+- Doctor-only creation
+- Strict relational integrity
 
-## 5. Prescription Module
+## Payments
+- Linked to consultations
+- Supports 1:M relationship
+- Audit-safe tracking
 
-- Only doctors can create prescriptions
-- Strictly linked to completed consultations
-- Patients can retrieve their prescriptions
-- Enforced relational integrity
-
----
-
-## 6. Audit Logging
-
-Critical operations are logged for:
-
-- Traceability
-- Compliance
-- Security monitoring
-- Post-incident investigation
-
----
-
-# 📦 Core API Endpoints
-
-## Authentication
-- `POST /auth/login`
-
-## Availability
-- `POST /availability/`
-- `GET /availability/`
-
-## Booking
-- `POST /bookings/`
-- Requires `idempotency-key` header
-
-## Consultation
-- `GET /consultations/my`
-- `PATCH /consultations/{id}/status`
-
-## Prescription
-- `POST /prescriptions/`
-- `GET /prescriptions/my`
+## Admin Analytics
+Aggregated system metrics:
+- Users
+- Doctors
+- Consultations
+- Completed consultations
+- Payments
 
 ---
 
@@ -174,191 +189,169 @@ Critical operations are logged for:
 
 ## Core Tables
 
-- `users`
-- `availability_slots`
-- `consultations`
-- `prescriptions`
-- `idempotency_keys`
-- `audit_logs`
+- users
+- profiles
+- doctors
+- availability_slots
+- consultations
+- prescriptions
+- payments
+- idempotency_keys
+- audit_logs
 
-## Relationships
+## Integrity Guarantees
 
-- One user → many consultations
-- One availability slot → one consultation
-- One consultation → one prescription
-- One booking request → one idempotency key
+- 1:1 and 1:M relationships enforced via foreign keys
+- Unique idempotency constraint
+- Slot → consultation exclusivity
+- Row-level locking for allocation safety
+- Indexed high-cardinality lookup paths
 
-PostgreSQL is used to leverage:
+PostgreSQL chosen for:
 
 - Strong ACID guarantees
-- Transaction isolation
-- Row-level locking
-- Unique constraints for integrity enforcement
-- Proven reliability at scale
+- Mature concurrency model
+- Proven production reliability
+- Deterministic transactional semantics
 
 ---
 
-# 🔐 Security Controls
+# 📈 Scalability Model
 
-- JWT authentication (stateless)
-- Role-based access control (RBAC)
-- bcrypt password hashing
-- Idempotent writes
-- Pydantic request validation
-- Environment variable secrets
-- No hardcoded credentials
-- Transaction management
-- Audit logging
-- Defense against double-spend booking attacks via DB constraints
-
----
-
-# ⚙️ Scalability & Concurrency Strategy
-
-- Stateless API (horizontal scaling ready)
+- Stateless API → horizontal scaling ready
 - Safe for multi-instance deployments
-- Row-level locking for slot allocation
-- Unique constraints to prevent duplication
-- Database-level guarantees over application-level assumptions
-- Designed for high concurrency scenarios such as peak consultation booking windows.
-- Safe under horizontal pod autoscaling (Kubernetes-ready design)
+- Read replica compatible (future)
+- Partition-ready consultation table
+- Kubernetes-ready architecture
+- No reliance on sticky sessions
+
+Redis intentionally excluded to reduce operational complexity for this scope.
 
 ---
 
-# 🔄 Design Decisions & Tradeoffs
+# 📊 Observability
 
-- PostgreSQL selected for transactional correctness over eventual consistency.
-- Row-level locking chosen over optimistic locking to guarantee booking safety.
-- JWT stateless authentication selected for horizontal scalability.
-- Redis intentionally excluded to minimize infrastructure complexity.
-- Background workers excluded to keep assignment scope focused.
-- Prioritized correctness and integrity over premature optimization.
+## Current
+
+- Structured logging
+- Audit logging
+- Health endpoint
+- Transaction-level correctness guarantees
+
+## Future
+
+- Prometheus metrics
+- Distributed tracing
+- Background workers (Celery)
+- Redis caching
+- Rate limiting
+- CI/CD pipeline
+- Kubernetes deployment
 
 ---
 
-# 📋 Prerequisites
+# 🧪 Testing Strategy
 
-- Docker Desktop (Windows/Mac/Linux)
-- Docker Compose v2+
-- GIT
+Planned automated coverage for:
+
+- Authentication & RBAC
+- Idempotent booking behavior
+- Concurrency safety
+- Consultation state transitions
+- Role-based restrictions
+
+Future additions:
+
+- Integration tests
+- Load & stress testing
+- CI/CD automation
 
 ---
 
-# 🐳 Running the Project (Docker)
+# 🐳 Running with Docker
+Ensure Docker Desktop and Docker Compose v2+ are installed.
 
-## 1. Clone Repository
+### 1. Clone Repository
 
 ```bash
 git clone <your-repo-url>
-cd amrutam-backend
+cd telemedicine-backend
 ```
 
-## 2. Build Containers
+###  2. Build Containers
 
 ```bash
 docker compose build
 ```
 
-## 3. Start Services
+### 3. Start Services
 
 ```bash
 docker compose up -d
 ```
 
-## 4. Stop Services
+###  4. Stop Services
 ```bash
 docker compose down
 ```
 
-## 4. Access API
+###  5. Access API
 
 Swagger UI:
 http://localhost:8000/docs
 
----
-
-# 🔧 Local Development (Without Docker)
-
+# 🔧 Local Development
 ```bash
 python -m venv venv
-# Windows:
+
+# Windows
 venv\Scripts\activate
-# Mac/Linux:
+
+# Mac/Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
----
 
-# 🛠 Environment Variables
+# 🌍 Environment Variables
 
-```bash
 Create a .env file in the project root:
 
+```bash
 DATABASE_URL=postgresql://postgres:postgres@db:5432/postgres
 SECRET_KEY=supersecret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
 
----
-
-# 📊 Observability (Current & Future)
-
-## Current
-
-- Structured logging
-- Transaction-level integrity
-- Audit logs for critical operations
+Swagger UI:
+http://localhost:8000/docs
 
 ---
 
-## Future Enhancements
+# 🏁 Design Philosophy
 
-- Redis caching layer
-- Background workers (Celery)
-- Prometheus metrics
-- Distributed tracing
-- Rate limiting
-- Multi-factor authentication
-- CI/CD pipeline
-- Kubernetes deployment
+This backend emphasizes:
 
----
+- Deterministic behavior under failure
+- Strong transactional guarantees
+- Concurrency safety by design
+- Security-first architecture 
+- Explicit tradeoffs 
+- Production-oriented thinking
 
-# 🧪 Testing
+# 📌 What This Project Demonstrates
 
-Automated tests are planned for the following core workflows:
-
-- Authentication & authorization
-- Idempotent booking handling
-- Concurrency safety
-- Consultation state transitions
-- Role-based access control
-
-Future improvements include:
-- Integration testing
-- Load & stress testing
-- CI pipeline automation
-
----
-
-# 🏁 Final Notes
-
-This backend emphasizes
-- Transactional correctness
-- Concurrency safety
-- Scalable stateless architecture
-- Security by design
-- Production-oriented engineering decisions
-
-Designed not just to work — but to work reliably under load.
+- Distributed systems thinking 
+- Concurrency control strategy 
+- Idempotent API design 
+- Database-level invariant enforcement 
+- Stateless scalable backend architecture 
+- Security-conscious implementation 
+- Clean domain modeling
 
 ---
 
 # 📸 Screenshots
-
 ![Swagger UI](/docs/screenshots/swagger.jpg)
-
----

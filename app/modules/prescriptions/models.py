@@ -8,7 +8,11 @@ from app.db.base import Base
 class Prescription(Base):
     __tablename__ = "prescriptions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id = Column(
+        UUID(as_uuid=True), 
+        primary_key=True, 
+        default=uuid.uuid4
+    )
 
     consultation_id = Column(
         UUID(as_uuid=True),
@@ -28,6 +32,11 @@ class Prescription(Base):
         nullable=False
     )
 
-    notes = Column(Text, nullable=False)
-
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    notes = Column(
+        Text, nullable=False
+    )
+    
+    created_at = Column(
+        DateTime(timezone=True), 
+        server_default=func.now()
+    )

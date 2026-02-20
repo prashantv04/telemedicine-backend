@@ -4,6 +4,7 @@ from app.db.base import Base
 from app.db.session import engine
 from sqlalchemy.exc import OperationalError
 
+from app.modules.admin.routes import router as admin_router
 from app.modules.audit.router import router as audit_router
 from app.modules.auth.routers import router as auth_router
 from app.modules.users.routers import router as users_router
@@ -35,10 +36,7 @@ def on_startup():
         raise Exception("Database not available")
 
 
-# @app.get("/")
-# def health():
-#     return {"status": "ok"}
-
+app.include_router(admin_router)
 app.include_router(audit_router)
 app.include_router(auth_router)
 app.include_router(availability_router)
