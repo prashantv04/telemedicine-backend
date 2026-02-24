@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -18,7 +18,7 @@ def get_admin_analytics(
     current_user: User = Depends(get_current_user),
 ):
     if current_user.role != "admin":
-        return {"detail": "Not authorized"}
+        raise HTTPException(status_code=403, detail="Forbidden")
 
     total_users = db.query(func.count(User.id)).scalar()
     total_doctors = db.query(func.count(User.id)).filter(User.role == "doctor").scalar()

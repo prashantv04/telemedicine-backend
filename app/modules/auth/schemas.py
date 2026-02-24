@@ -6,6 +6,10 @@ class Role(str, Enum):
     patient = "patient"
     admin = "admin"
 
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str

@@ -11,6 +11,7 @@ from app.modules.users.routers import router as users_router
 from app.modules.availability.routers import router as availability_router
 from app.modules.bookings.routers import router as booking_router
 from app.modules.consultations.routers import router as consultations_router
+from app.modules.payments.routers import router as payments_router
 from app.modules.prescriptions.routers import router as prescription_router
 
 
@@ -42,6 +43,7 @@ app.include_router(auth_router)
 app.include_router(availability_router)
 app.include_router(booking_router)
 app.include_router(consultations_router)
+app.include_router(payments_router)
 app.include_router(prescription_router)
 app.include_router(users_router)
 
