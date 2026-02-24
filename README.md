@@ -122,7 +122,8 @@ Reusing the same `idempotency-key`:
 - Never allocates a new slot
 - Remains safe under concurrent retries
 
-This mirrors patterns used in high-scale payment systems.
+The idempotency model can be extended to financial operations,
+ensuring safe retries in distributed payment flows.
 
 ---
 
@@ -171,9 +172,32 @@ Guarantees:
 - Strict relational integrity
 
 ## Payments
-- Linked to consultations
-- Supports 1:M relationship
-- Audit-safe tracking
+
+The payment module models financial transactions linked to consultations.
+
+### Design Goals
+
+- Deterministic payment recording
+- Idempotent-safe financial operations
+- Strict relational integrity
+- Audit-ready transaction logging
+
+### Capabilities
+
+- Payments linked to consultations (1:M)
+- Supports multiple payment attempts per consultation
+- Explicit payment status tracking (`pending`, `completed`, `failed`)
+- Strong foreign key enforcement
+- Audit logging for financial traceability
+
+### Integrity Guarantees
+
+- Payment must reference a valid consultation
+- No orphan transactions
+- Immutable completed payments
+- Database-enforced relational constraints
+
+Designed with patterns inspired by high-scale transactional systems.
 
 ## Admin Analytics
 Aggregated system metrics:
