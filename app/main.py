@@ -49,27 +49,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# app = FastAPI(title="Telemedicine Backend")
-#
-#
-# # Create tables on startup
-# @app.on_event("startup")
-# def on_startup():
-#     retries = 10
-#
-#     while retries > 0:
-#         try:
-#             print("Waiting for database...")
-#             Base.metadata.create_all(bind=engine)
-#             print("Database ready!")
-#             break
-#         except OperationalError:
-#             retries -= 1
-#             time.sleep(2)
-#
-#     if retries == 0:
-#         raise Exception("Database not available")
-
 
 # Routers
 app.include_router(admin_router)

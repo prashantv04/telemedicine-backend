@@ -16,7 +16,5 @@ class AvailabilityResponse(BaseModel):
     is_booked: bool
 
     model_config = ConfigDict(from_attributes=True)
-    # class Config:
-    #     from_attributes = True
 
 

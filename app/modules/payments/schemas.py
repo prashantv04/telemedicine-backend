@@ -22,8 +22,6 @@ class PaymentResponse(BaseModel):
     provider_reference: Optional[str]
 
     model_config = ConfigDict(from_attributes=True)
-    # class Config:
-    #     from_attributes = True
 
 
 class PaymentWebhookUpdate(BaseModel):

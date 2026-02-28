@@ -14,5 +14,3 @@ class BookingResponse(BaseModel):
     consultation_id: UUID
 
     model_config = ConfigDict(from_attributes=True)
-    # class Config:
-    #     from_attributes = True
