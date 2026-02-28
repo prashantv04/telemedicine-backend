@@ -1,5 +1,8 @@
 # Telemedicine Backend
 
+[![CI](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml)
+
 Production-grade backend powering a high-concurrency telemedicine platform.
 
 Designed with **transactional correctness, concurrency safety, scalability, and security as first-class concerns** — not as afterthoughts.
@@ -93,6 +96,35 @@ Future-ready for:
 - Rate limiting
 - TLS termination
 - Dependency scanning
+
+---
+
+# 🧪 Automated Tests & CI
+
+This project includes automated testing and continuous integration:
+
+- **Testing Framework:** pytest with coverage
+- **Coverage:** ~80% of core modules
+- **CI:** GitHub Actions workflow running tests on PostgreSQL 15
+- **Highlights:**
+  - Idempotent booking behavior validated
+  - Concurrency and double-booking prevention tested
+  - Authentication and RBAC verified
+  - Payment and consultation flows tested
+
+Run tests locally:
+
+```bash
+# Activate virtual environment
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+
+# Install dependencies
+pip install -r requirements.txt
+pip install pytest pytest-cov psycopg2-binary
+
+# Run tests
+pytest --cov=app -v
+```
 
 ---
 
