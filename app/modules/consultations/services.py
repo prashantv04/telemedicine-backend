@@ -9,6 +9,13 @@ from app.modules.audit.models import AuditLog
 from app.modules.consultations.models import Consultation
 from app.modules.users.models import User
 
+
+VALID_TRANSITIONS = {
+    "scheduled": ["completed", "cancelled"],
+    "completed": [],
+    "cancelled": [],
+}
+
 def get_user_consultations(db: Session, user_id: UUID, role: str):
     if role == "patient":
         return db.query(Consultation).filter(
@@ -38,18 +45,22 @@ def update_consultation_status(
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
 
-    # RBAC rules
+    # Validate state transition
+    allowed = VALID_TRANSITIONS.get(consultation.status, [])
+
+    if new_status not in allowed:
+        raise HTTPException(status_code=400, detail="Invalid status transition")
+
+    # RBAC
     if role == "doctor":
         if consultation.doctor_id != user_id:
             raise HTTPException(status_code=403, detail="Not your consultation")
-
         if new_status != "completed":
             raise HTTPException(status_code=400, detail="Doctor can only complete consultation")
 
     if role == "patient":
         if consultation.patient_id != user_id:
             raise HTTPException(status_code=403, detail="Not your consultation")
-
         if new_status != "cancelled":
             raise HTTPException(status_code=400, detail="Patient can only cancel consultation")
 
@@ -68,6 +79,7 @@ def update_consultation_status(
     db.refresh(consultation)
 
     return consultation
+
 
 def search_consultations(
     db: Session,

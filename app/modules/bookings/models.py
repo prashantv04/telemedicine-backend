@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.db.base import Base
@@ -36,4 +36,8 @@ class Booking(Base):
     idempotency_key = Column(
         String, unique=True, 
         nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("slot_id", name="uq_booking_slot"),
     )

@@ -1,4 +1,5 @@
-from pydantic_settings import BaseSettings
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -6,9 +7,33 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     access_token_expire_minutes: int = 60
 
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    class Config:
-        env_file = ".env"
+
+@lru_cache
+def get_settings():
+    return Settings()
 
 
-settings = Settings()
+settings = get_settings()
+
+# from pydantic_settings import BaseSettings
+#
+#
+# class Settings(BaseSettings):
+#     DATABASE_URL: str
+#     SECRET_KEY: str
+#     access_token_expire_minutes: int = 60
+#
+#
+#     class Config:
+#         env_file = ".env"
+#
+#
+# settings = Settings()
+
+

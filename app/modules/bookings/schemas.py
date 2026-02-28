@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from uuid import UUID
 
 
@@ -11,6 +11,8 @@ class BookingResponse(BaseModel):
     slot_id: UUID
     doctor_id: UUID
     status: str  # from Consultation
+    consultation_id: UUID
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+    # class Config:
+    #     from_attributes = True

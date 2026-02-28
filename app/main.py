@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
 import time
 from app.db.base import Base
 from app.db.session import engine
@@ -15,12 +16,11 @@ from app.modules.payments.routers import router as payments_router
 from app.modules.prescriptions.routers import router as prescription_router
 
 
-app = FastAPI(title="Telemedicine Backend")
-
-
-# Create tables on startup
-@app.on_event("startup")
-def on_startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # -----------------------------
+    # Startup logic
+    # -----------------------------
     retries = 10
 
     while retries > 0:
@@ -36,7 +36,42 @@ def on_startup():
     if retries == 0:
         raise Exception("Database not available")
 
+    yield  # 👈 Application runs here
 
+    # -----------------------------
+    # Shutdown logic (optional)
+    # -----------------------------
+    print("Shutting down application...")
+
+
+app = FastAPI(
+    title="Telemedicine Backend",
+    lifespan=lifespan
+)
+
+# app = FastAPI(title="Telemedicine Backend")
+#
+#
+# # Create tables on startup
+# @app.on_event("startup")
+# def on_startup():
+#     retries = 10
+#
+#     while retries > 0:
+#         try:
+#             print("Waiting for database...")
+#             Base.metadata.create_all(bind=engine)
+#             print("Database ready!")
+#             break
+#         except OperationalError:
+#             retries -= 1
+#             time.sleep(2)
+#
+#     if retries == 0:
+#         raise Exception("Database not available")
+
+
+# Routers
 app.include_router(admin_router)
 app.include_router(audit_router)
 app.include_router(auth_router)

@@ -1,6 +1,6 @@
 import uuid
 from decimal import Decimal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from app.modules.payments.models import PaymentStatus
 
@@ -21,8 +21,9 @@ class PaymentResponse(BaseModel):
     status: PaymentStatus
     provider_reference: Optional[str]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
+    # class Config:
+    #     from_attributes = True
 
 
 class PaymentWebhookUpdate(BaseModel):
