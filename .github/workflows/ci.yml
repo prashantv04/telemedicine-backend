@@ -9,28 +9,37 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      DATABASE_URL: postgresql+psycopg2://test:test@localhost:5432/test_db
+      SECRET_KEY: testsecret
+
     steps:
-      # Step 1: Checkout code
       - uses: actions/checkout@v4
 
-      # Step 2: Setup Python 3.11
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # Step 3: Set temporary environment variables for tests
-      - name: Set test environment variables
-        run: |
-          echo "DATABASE_URL=sqlite:///./test.db" >> $GITHUB_ENV
-          echo "SECRET_KEY=testsecret" >> $GITHUB_ENV
-
-      # Step 4: Install dependencies
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest pytest-cov
+          pip install pytest pytest-cov psycopg2-binary
 
-      # Step 5: Run tests with coverage
       - name: Run tests
         run: pytest --cov=app -v
