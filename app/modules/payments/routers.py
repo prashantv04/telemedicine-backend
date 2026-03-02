@@ -18,7 +18,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=PaymentResponse)
+@router.post("/", response_model=PaymentResponse, status_code=201)
 def create_payment(
     payload: PaymentCreate,
     db: Session = Depends(get_db),

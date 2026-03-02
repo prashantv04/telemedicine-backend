@@ -81,6 +81,15 @@ async def doctor_token(async_client):
         "doctor"
     )
 
+@pytest_asyncio.fixture
+async def admin_token(async_client):
+    return await create_and_login(
+        async_client,
+        "admin@test.com",
+        "password",
+        "admin"
+    )
+
 
 # -------------------------
 # Availability Slot
