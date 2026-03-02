@@ -1,29 +1,31 @@
 # Telemedicine Backend
 
 [![CI](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml/badge.svg)](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/coverage-80%25-brightgreen)](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-85%25-brightgreen)](https://github.com/prashantv04/telemedicine-backend/actions/workflows/ci.yml)
 
 Production-grade backend powering a high-concurrency telemedicine platform.
 
-Designed with **transactional correctness, concurrency safety, scalability, and security as first-class concerns** — not as afterthoughts.
+Designed with **transactional correctness, concurrency safety, scalability, and security as first-class concerns**, not as afterthoughts.
 
 ---
 
 # 🧠 System Vision
 
-This system models a real-world telemedicine workflow where:
+This system models a transactional telemedicine workflow with strict domain boundaries and enforced state transitions.
 
-- Doctors expose time-bound availability
-- Patients book consultations
-- State transitions are strictly enforced
-- Prescriptions are issued post-consultation
-- Financial transactions are tracked
-- All operations remain safe under retries and concurrency
+Core behaviors:
 
-The architecture prioritizes:
+- Doctors publish time-bound availability
+- Patients book consultations with idempotent guarantees
+- Consultation states follow validated transitions
+- Prescriptions are issued only after completion
+- Payments are recorded with lifecycle tracking
+- All operations remain safe under retries and high concurrency
+
+Architectural priorities:
 
 - Strong consistency over eventual consistency
-- Deterministic booking behavior
+- Deterministic booking under contention
 - Database-enforced invariants
 - Stateless horizontal scalability
 
@@ -33,11 +35,13 @@ The architecture prioritizes:
 
 ## High-Level Flow
 
+```
 Client  
 ↓  
 FastAPI (Stateless API Layer)  
 ↓  
 PostgreSQL (ACID-compliant transactional store)
+```
 
 ### Architectural Principles
 
@@ -66,12 +70,12 @@ PostgreSQL (ACID-compliant transactional store)
 
 # 🎯 Performance Targets
 
-| Metric | Target |
-|--------|--------|
-| Daily Consultations | 100,000+ |
-| p95 Read Latency | < 200ms |
-| p95 Write Latency | < 500ms |
-| Availability | 99.95% |
+| Metric                   | Target    |
+|--------------------------|-----------|
+| Daily Consultation Capacity | 100,000+  |
+| p95 Read Latency         | < 200ms   |
+| p95 Write Latency        | < 500ms   |
+| Availability Goal        | 99.95%    |
 
 Designed for high booking concurrency during peak consultation windows.
 
@@ -89,28 +93,31 @@ Designed for high booking concurrency during peak consultation windows.
 - Database-level double-booking prevention
 - Idempotent write guarantees
 
-Future-ready for:
+### Extension Points
 
-- Multi-factor authentication (MFA)
-- Key rotation
-- Rate limiting
-- TLS termination
-- Dependency scanning
+The authentication layer can be extended to support MFA, key rotation,
+and rate limiting without architectural changes.
 
 ---
 
-# 🧪 Automated Tests & CI
+## 🧪 Testing & Continuous Integration
 
-This project includes automated testing and continuous integration:
+The project includes automated integration tests and CI validation to ensure transactional integrity, idempotency, and concurrency safety.
 
-- **Testing Framework:** pytest with coverage
+- **Testing Framework:** pytest
+- **Database (CI):** PostgreSQL 15
 - **Coverage:** ~80% of core modules
-- **CI:** GitHub Actions workflow running tests on PostgreSQL 15
-- **Highlights:**
-  - Idempotent booking behavior validated
-  - Concurrency and double-booking prevention tested
-  - Authentication and RBAC verified
-  - Payment and consultation flows tested
+- **CI:** GitHub Actions workflow running tests on every push
+
+### 🔍 What is validated
+
+- Idempotent booking behavior
+- Concurrency & double-booking prevention
+- Authentication & RBAC enforcement
+- Payment lifecycle validation
+- Webhook simulation
+- Admin-only refund enforcement
+- Consultation state transition validation
 
 Run tests locally:
 
@@ -125,6 +132,22 @@ pip install pytest pytest-cov psycopg2-binary
 # Run tests
 pytest --cov=app -v
 ```
+
+---
+
+# 🧵 Concurrency Strategy
+
+Booking conflicts are resolved via:
+
+- `SELECT ... FOR UPDATE` row-level locking
+- Unique constraints on slot allocation
+- Atomic transaction boundaries
+
+Why not optimistic locking?
+
+Because under high contention (e.g., popular doctors), deterministic locking ensures correctness without retry storms.
+
+The system prioritizes correctness over premature micro-optimizations.
 
 ---
 
@@ -159,33 +182,43 @@ ensuring safe retries in distributed payment flows.
 
 ---
 
-# 🧵 Concurrency Strategy
+# 🧩 Tradeoffs & Constraints
+- Strong consistency chosen over eventual consistency
+- Row-level locking preferred over optimistic retries
+- No distributed cache to reduce complexity
+- Webhook-based payment state updates instead of polling
 
-Booking conflicts are resolved via:
+---
 
-- `SELECT ... FOR UPDATE` row-level locking
-- Unique constraints on slot allocation
-- Atomic transaction boundaries
+# 📈 Scalability Model
 
-Why not optimistic locking?
+- Stateless API layer (horizontal scaling friendly)
+- Safe for multi-instance deployments
+- Transactional consistency enforced at database level
+- No reliance on sticky sessions
 
-Because under high contention (e.g., popular doctors), deterministic locking ensures correctness without retry storms.
-
-The system prioritizes correctness over premature micro-optimizations.
+Redis intentionally excluded to reduce operational complexity for this scope.
 
 ---
 
 # 📦 Core Domain Modules
 
+## Admin Analytics
+Aggregated system metrics:
+- Users
+- Doctors
+- Consultations
+- Completed consultations
+- Payments
+
+## Audit Logging
+- Consultation status changes tracked
+- Action-based audit trail entries
+
 ## Authentication & Users
 - JWT-based login/signup
 - Role enforcement
 - MFA-ready schema
-
-## Doctor Availability
-- Time-slot-based modeling
-- Conflict-safe allocation
-- Concurrency-safe booking
 
 ## Consultations
 Supported state flow:
@@ -198,46 +231,69 @@ Guarantees:
 - Immutable once completed
 - Role-restricted mutation
 
+## Doctor Availability
+- Time-slot-based modeling
+- Conflict-safe allocation
+- Concurrency-safe booking
+
 ## Prescriptions
 - Only allowed for completed consultations
 - Doctor-only creation
 - Strict relational integrity
 
-## Payments
+## Payments Module
+- Idempotent payment creation
+- Webhook-driven status updates
+- Admin-only refund enforcement
+- Database-enforced constraint preventing duplicate successful payments per consultation
+- Payment lifecycle (Deterministic State Machine)
+```
+pending → authorized → succeeded → refunded
+           │
+           └────────→ failed
+```
+- State Definitions
+  - **pending** – Payment record created, awaiting gateway processing
+  - **authorized** – Payment authorized by gateway but not yet captured
+  - **succeeded** – Payment successfully completed and captured
+  - **failed** – Payment attempt failed (terminal state)
+  - **refunded** – Successful payment reversed by admin (terminal state)
 
-The payment module models financial transactions linked to consultations.
+- Invariants & Guarantees
+  - A consultation may have multiple payment attempts.
+  - Only one `succeeded` payment is allowed per consultation (database enforced).
+  - Refunds are allowed only after a payment reaches `succeeded`.
+  - `succeeded` payments are immutable except for a valid transition to `refunded`.
+  - All state transitions are controlled and validated server-side.
 
-### Design Goals
+---
+# 🎯 Design Goals
 
 - Deterministic payment recording
 - Idempotent-safe financial operations
 - Strict relational integrity
 - Audit-ready transaction logging
 
-### Capabilities
+---
+
+# ⚙️ Capabilities
 
 - Payments linked to consultations (1:M)
 - Supports multiple payment attempts per consultation
-- Explicit payment status tracking (`pending`, `completed`, `failed`)
+- Explicit payment status tracking (`pending`, `authorized`, `succeeded`, `failed`, `refunded`)
 - Strong foreign key enforcement
 - Audit logging for financial traceability
 
-### Integrity Guarantees
+---
+
+# 🛡 Integrity Guarantees
 
 - Payment must reference a valid consultation
 - No orphan transactions
 - Immutable completed payments
 - Database-enforced relational constraints
-
-Designed with patterns inspired by high-scale transactional systems.
-
-## Admin Analytics
-Aggregated system metrics:
-- Users
-- Doctors
-- Consultations
-- Completed consultations
-- Payments
+  
+Designed using patterns inspired by high-throughput transactional systems (idempotency keys, row-level locking, DB-enforced invariants).
 
 ---
 
@@ -272,89 +328,68 @@ PostgreSQL chosen for:
 
 ---
 
-# 📈 Scalability Model
-
-- Stateless API → horizontal scaling ready
-- Safe for multi-instance deployments
-- Read replica compatible (future)
-- Partition-ready consultation table
-- Kubernetes-ready architecture
-- No reliance on sticky sessions
-
-Redis intentionally excluded to reduce operational complexity for this scope.
-
----
-
 # 📊 Observability
 
 ## Current
 
 - Structured logging
-- Audit logging
+- Audit logging for critical state changes
 - Health endpoint
-- Transaction-level correctness guarantees
 
-## Future
+## Designed to Integrate With
 
-- Prometheus metrics
-- Distributed tracing
-- Background workers (Celery)
-- Redis caching
-- Rate limiting
-- CI/CD pipeline
-- Kubernetes deployment
+- Metrics systems (e.g., Prometheus)
+- Distributed tracing tools
+- Background job processing
 
 ---
+# 🧠 Engineering Principles
 
-# 🧪 Testing Strategy
+This system was designed around:
 
-Planned automated coverage for:
-
-- Authentication & RBAC
-- Idempotent booking behavior
-- Concurrency safety
-- Consultation state transitions
-- Role-based restrictions
-
-Future additions:
-
-- Integration tests
-- Load & stress testing
-- CI/CD automation
+- Deterministic behavior under retries and failure
+- Strong transactional guarantees
+- Concurrency-safe resource allocation
+- Database-enforced invariants
+- Explicit architectural tradeoffs
+- Stateless, horizontally scalable API design
 
 ---
 
 # 🐳 Running with Docker
 Ensure Docker Desktop and Docker Compose v2+ are installed.
 
-### 1. Clone Repository
+## 1. Clone Repository
 
 ```bash
 git clone <your-repo-url>
 cd telemedicine-backend
 ```
 
-###  2. Build Containers
+##  2. Build Containers
 
 ```bash
 docker compose build
 ```
 
-### 3. Start Services
+## 3. Start Services
 
 ```bash
 docker compose up -d
 ```
 
-###  4. Stop Services
+##  4. Stop Services
 ```bash
 docker compose down
 ```
 
-###  5. Access API
+##  5. Access API
 
-Swagger UI:
+- Swagger UI:
 http://localhost:8000/docs
+- OpenAPI schema: http://localhost:8000/openapi.json
+
+---
 
 # 🔧 Local Development
 ```bash
@@ -369,7 +404,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
-
+---
 # 🌍 Environment Variables
 
 Create a .env file in the project root:
@@ -380,34 +415,9 @@ SECRET_KEY=supersecret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 ```
-
-Swagger UI:
-http://localhost:8000/docs
+For local (non-Docker) development, adjust `DATABASE_URL` accordingly.
 
 ---
 
-# 🏁 Design Philosophy
-
-This backend emphasizes:
-
-- Deterministic behavior under failure
-- Strong transactional guarantees
-- Concurrency safety by design
-- Security-first architecture 
-- Explicit tradeoffs 
-- Production-oriented thinking
-
-# 📌 What This Project Demonstrates
-
-- Distributed systems thinking 
-- Concurrency control strategy 
-- Idempotent API design 
-- Database-level invariant enforcement 
-- Stateless scalable backend architecture 
-- Security-conscious implementation 
-- Clean domain modeling
-
----
-
-# 📸 Screenshots
+# 📸 API Preview
 ![Swagger UI](/docs/screenshots/swagger.jpg)
