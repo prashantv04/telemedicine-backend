@@ -106,7 +106,7 @@ The project includes automated integration tests and CI validation to ensure tra
 
 - **Testing Framework:** pytest
 - **Database (CI):** PostgreSQL 15
-- **Coverage:** ~80% of core modules
+- **Coverage:** ~85% of core modules
 - **CI:** GitHub Actions workflow running tests on every push
 
 ### 🔍 What is validated
