@@ -5,11 +5,22 @@ from app.db.session import engine
 from app.db.base import Base
 import pytest
 
-
+# -------------------------
+# Reset DB before each test session
+# -------------------------
 @pytest.fixture(autouse=True)
 def reset_database():
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+
+
+# -------------------------
+# Disable rate limiter for tests
+# -------------------------
+@pytest.fixture(autouse=True, scope="session")
+def disable_rate_limiter():
+    app.state.limiter.enabled = False
+
 
 # -------------------------
 # Async Test Client
