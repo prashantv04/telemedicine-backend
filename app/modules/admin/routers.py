@@ -7,7 +7,6 @@ from app.modules.users.models import User
 from app.modules.consultations.models import Consultation
 from app.modules.payments.models import Payment
 from app.modules.auth.dependencies import get_current_user
-from app.modules.users.models import Role
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 

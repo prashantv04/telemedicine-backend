@@ -51,6 +51,8 @@ def search(
     status: Optional[str] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -62,4 +64,6 @@ def search(
         status=status,
         date_from=date_from,
         date_to=date_to,
+        page=page,
+        limit=limit,
     )

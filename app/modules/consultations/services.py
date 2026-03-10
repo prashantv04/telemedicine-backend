@@ -80,7 +80,6 @@ def update_consultation_status(
 
     return consultation
 
-
 def search_consultations(
     db: Session,
     current_user: User,
@@ -89,19 +88,23 @@ def search_consultations(
     status: Optional[str] = None,
     date_from: Optional[datetime] = None,
     date_to: Optional[datetime] = None,
+    page: int = 1,
+    limit: int = 20,
 ) -> List[Consultation]:
     """
-    Secure consultation search with strict RBAC.
+    Secure consultation search with strict RBAC and pagination.
 
     Role Rules:
     - patient → can ONLY see their own consultations
     - doctor  → can ONLY see their own consultations
-    - admin   → can see all + apply filters
+    - admin   → can see all consultations and apply filters
     """
 
     query = db.query(Consultation)
 
-    # BASE ACCESS CONTROL (MANDATORY)
+    # -------------------------------
+    # BASE ACCESS CONTROL (RBAC)
+    # -------------------------------
     if current_user.role == "patient":
         query = query.filter(Consultation.patient_id == current_user.id)
 
@@ -110,14 +113,14 @@ def search_consultations(
 
     elif current_user.role == "admin":
         # Admin has full visibility
-        return query.all()
+        pass
 
     else:
         raise HTTPException(status_code=403, detail="Unauthorized role")
 
-    # OPTIONAL FILTERS (SAFE APPLICATION)
-
-    # Only admin can filter arbitrary doctor/patient
+    # -------------------------------
+    # ADMIN FILTERS
+    # -------------------------------
     if current_user.role == "admin":
         if doctor_id:
             query = query.filter(Consultation.doctor_id == doctor_id)
@@ -125,18 +128,26 @@ def search_consultations(
         if patient_id:
             query = query.filter(Consultation.patient_id == patient_id)
 
-    # Status filter (allowed for all roles)
+    # -------------------------------
+    # OPTIONAL FILTERS
+    # -------------------------------
     if status:
         query = query.filter(Consultation.status == status)
 
-    # Date range filters
     if date_from:
         query = query.filter(Consultation.created_at >= date_from)
 
     if date_to:
         query = query.filter(Consultation.created_at <= date_to)
 
-    # Optional ordering (recommended for production)
+    # -------------------------------
+    # ORDERING
+    # -------------------------------
     query = query.order_by(Consultation.created_at.desc())
 
-    return query.all()
+    # -------------------------------
+    # PAGINATION
+    # -------------------------------
+    offset = (page - 1) * limit
+
+    return query.offset(offset).limit(limit).all()

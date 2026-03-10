@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from uuid import UUID
-
+from fastapi import BackgroundTasks
 from app.api.deps import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.bookings.schemas import BookingCreate, BookingResponse
 from app.modules.bookings.service import create_booking
+from app.modules.bookings.tasks import send_booking_notification
 from app.modules.consultations.models import Consultation
 
 router = APIRouter(prefix="/bookings", tags=["Bookings"])
@@ -15,6 +16,7 @@ router = APIRouter(prefix="/bookings", tags=["Bookings"])
 def book_slot(
     payload: BookingCreate,
     response: Response,
+    background_tasks: BackgroundTasks,
     idempotency_key: str = Header(...),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
@@ -36,6 +38,13 @@ def book_slot(
 
     if created:
         response.status_code = status.HTTP_201_CREATED
+
+        # Add background task
+        background_tasks.add_task(
+            send_booking_notification,
+            current_user.email,
+            str(consultation.id)
+        )
 
     return BookingResponse(
         id=booking.id,
