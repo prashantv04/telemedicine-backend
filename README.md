@@ -67,6 +67,42 @@ PostgreSQL (ACID-compliant transactional store)
 - OpenAPI (Swagger UI)
 
 ---
+# ⚙️ Production-Grade Features
+
+## Pagination for Search APIs
+- Search endpoints support `page` and `limit` query parameters.
+- **Example:**  
+```bash
+  GET /consultations/search?page=1&limit=20
+```
+  
+## Rate Limiting
+
+- **Signup**: 3 requests/min
+- **Login**: 5 requests/min
+- **Prevents** brute-force attacks and API abuse via **SlowAPI**.
+
+## Metrics / Observability
+
+- Prometheus metrics available at `/metrics`.
+- Tracks request counts, latency, CPU/memory usage, and garbage collection stats.
+
+## Background Jobs (Async Processing)
+
+- Heavy tasks like sending booking confirmation emails run asynchronously using FastAPI `BackgroundTasks`.
+- Non-blocking requests improve API responsiveness.
+
+## Structured Audit Logging
+
+- Logs user actions with `user_id`, `action`, `status_code`, and timestamp.
+- Supports compliance, security audits, and debugging.
+- Logs can be queried via:
+
+```bash
+  GET /audit/
+```
+
+---
 
 # 🎯 Performance Targets
 
