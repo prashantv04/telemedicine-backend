@@ -5,7 +5,7 @@ from fastapi import BackgroundTasks
 from app.api.deps import get_db
 from app.modules.auth.dependencies import get_current_user
 from app.modules.bookings.schemas import BookingCreate, BookingResponse
-from app.modules.bookings.service import create_booking
+from app.modules.bookings.services import create_booking
 from app.modules.bookings.tasks import send_booking_notification
 from app.modules.consultations.models import Consultation
 

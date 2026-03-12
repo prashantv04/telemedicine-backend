@@ -1,8 +1,11 @@
-from app.core.retry import retry_with_backoff
+from app.core.logging import logger
 
 
 def send_booking_notification(email: str, consultation_id: str):
-    # Here you would send an email, push notification, etc.
-    def _send():
-        print(f"Sending booking confirmation for consultation {consultation_id} to {email}")
-        retry_with_backoff(_send)
+    """
+    Background task for booking notification.
+    In production this could send email, SMS, or push notification.
+    """
+    logger.info(
+        f"Sending booking confirmation for consultation {consultation_id} to {email}"
+    )

@@ -5,7 +5,7 @@ from uuid import UUID
 from app.api.deps import get_db
 from app.modules.auth.dependencies import get_current_user
 from .schemas import AvailabilityCreate, AvailabilityResponse
-from .service import create_availability, list_availability
+from .services import create_availability, list_availability
 
 router = APIRouter(prefix="/availability", tags=["Availability"])
 

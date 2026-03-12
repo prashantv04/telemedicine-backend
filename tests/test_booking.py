@@ -1,4 +1,6 @@
 import asyncio
+from unittest.mock import patch
+
 import pytest
 
 
@@ -46,3 +48,30 @@ async def test_double_booking_prevention(
 
     assert 201 in status_codes
     assert 409 in status_codes
+
+@pytest.mark.asyncio
+async def test_booking_triggers_notification(
+    async_client,
+    patient_token,
+    slot_id
+):
+    headers = {
+        "Authorization": f"Bearer {patient_token}",
+        "idempotency-key": "notify-test-key"
+    }
+
+    payload = {"slot_id": slot_id}
+
+    # patch where the function is USED (router), not defined
+    with patch("app.modules.bookings.routers.send_booking_notification") as mock_task:
+
+        response = await async_client.post(
+            "/bookings/",
+            json=payload,
+            headers=headers
+        )
+
+        assert response.status_code == 201
+
+        # verify background task was scheduled
+        mock_task.assert_called_once()

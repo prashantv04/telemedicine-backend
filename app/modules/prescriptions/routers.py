@@ -6,7 +6,7 @@ from app.modules.auth.dependencies import get_current_user
 from app.modules.users.models import User
 from .models import Prescription
 from .schemas import PrescriptionCreate, PrescriptionResponse
-from .service import create_prescription
+from .services import create_prescription
 
 router = APIRouter(prefix="/prescriptions", tags=["Prescriptions"])
 
