@@ -40,7 +40,9 @@ Client
 ↓  
 FastAPI (Stateless API Layer)  
 ↓  
-PostgreSQL (ACID-compliant transactional store)
+PostgreSQL (ACID-compliant transactional store)  
+↓  
+Background Tasks (notifications / async jobs)
 ```
 
 ### Architectural Principles
@@ -51,7 +53,7 @@ PostgreSQL (ACID-compliant transactional store)
 - Row-level locking for conflict prevention
 - Database-enforced integrity
 - Role-based access control (RBAC)
-- Infrastructure-agnostic deployment
+- Infrastructure-agnostic deployment (Docker-based)
 
 ---
 
@@ -65,8 +67,10 @@ PostgreSQL (ACID-compliant transactional store)
 - bcrypt
 - Docker + Docker Compose
 - OpenAPI (Swagger UI)
+- Prometheus (metrics instrumentation)
 
 ---
+
 # ⚙️ Production-Grade Features
 
 ## Pagination for Search APIs
@@ -84,12 +88,12 @@ PostgreSQL (ACID-compliant transactional store)
 
 ## Metrics / Observability
 
-- Prometheus metrics available at `/metrics`.
+- Prometheus-compatible metrics exposed at `/metrics`.
 - Tracks request counts, latency, CPU/memory usage, and garbage collection stats.
 
 ## Background Jobs (Async Processing)
 
-- Heavy tasks like sending booking confirmation emails run asynchronously using FastAPI `BackgroundTasks`.
+- Heavy tasks like sending booking confirmations or other notifications run asynchronously using FastAPI `BackgroundTasks`.
 - Non-blocking requests improve API responsiveness.
 
 ## Structured Audit Logging
@@ -213,6 +217,17 @@ Reusing the same `idempotency-key`:
 - Never allocates a new slot
 - Remains safe under concurrent retries
 
+### Side Effects
+
+Post-booking side effects such as **notifications** are executed asynchronously using
+FastAPI `BackgroundTasks`.
+
+This ensures:
+
+- Booking transactions remain fast and atomic
+- External operations (e.g., notifications or integrations) do not block the API response
+- Idempotent booking guarantees remain unaffected by retry behavior
+
 The idempotency model can be extended to financial operations,
 ensuring safe retries in distributed payment flows.
 
@@ -270,7 +285,7 @@ Guarantees:
 ## Doctor Availability
 - Time-slot-based modeling
 - Conflict-safe allocation
-- Concurrency-safe booking
+- Concurrency-safe booking guarantees
 
 ## Prescriptions
 - Only allowed for completed consultations
@@ -368,6 +383,7 @@ PostgreSQL chosen for:
 
 ## Current
 
+- Prometheus metrics exposure
 - Structured logging
 - Audit logging for critical state changes
 - Health endpoint
