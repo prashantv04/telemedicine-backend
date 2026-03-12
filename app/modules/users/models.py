@@ -32,11 +32,15 @@ class User(Base, BaseModelMixin):
     )
 
     mfa_enabled: Mapped[bool] = mapped_column(
-        Boolean, default=False
+        Boolean,
+        server_default="false",
+        default=False
     )
 
     is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True
+        Boolean,
+        server_default="true",
+        default=True
     )
 
     created_at: Mapped[datetime] = mapped_column(

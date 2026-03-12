@@ -8,7 +8,7 @@ from app.modules.payments.schemas import (
     PaymentResponse,
     PaymentWebhookUpdate
 )
-from app.modules.payments.service import PaymentService
+from app.modules.payments.services import PaymentService
 from app.modules.users.models import User
 
 

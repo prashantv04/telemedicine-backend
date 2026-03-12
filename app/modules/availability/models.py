@@ -11,8 +11,8 @@ class AvailabilitySlot(Base):
     __tablename__ = "availability_slots"
 
     id = Column(
-        UUID(as_uuid=True), 
-        primary_key=True, 
+        UUID(as_uuid=True),
+        primary_key=True,
         default=uuid.uuid4
     )
 
@@ -24,17 +24,17 @@ class AvailabilitySlot(Base):
     )
 
     start_time = Column(
-        DateTime(timezone=True), 
+        DateTime(timezone=True),
         nullable=False
     )
 
     end_time = Column(
-        DateTime(timezone=True), 
+        DateTime(timezone=True),
         nullable=False
     )
 
     is_booked = Column(
-        Boolean, default=False, 
+        Boolean, default=False,
         nullable=False
     )
 
@@ -50,9 +50,10 @@ class AvailabilitySlot(Base):
         onupdate=func.now(),
         nullable=False,
     )
-    
+
     doctor = relationship("User")
 
     __table_args__ = (
         Index("ix_doctor_start_time", "doctor_id", "start_time"),
+        # Index("ix_slot_time_range", "start_time", "end_time"),
     )

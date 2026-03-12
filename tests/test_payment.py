@@ -1,6 +1,11 @@
+import uuid
 from decimal import Decimal
 
 import pytest
+
+
+def auth(token):
+    return {"Authorization": f"Bearer {token}"}
 
 
 # -----------------------------------------
@@ -9,20 +14,18 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_create_payment_success(
-    async_client,
-    patient_token,
-    consultation_id
+        async_client,
+        patient_token,
+        consultation_id
 ):
     response = await async_client.post(
         "/payments/",
         json={
             "consultation_id": consultation_id,
             "amount": 1000,
-            "idempotency_key": "payment-test-1"
+            "idempotency_key": str(uuid.uuid4())
         },
-        headers={
-            "Authorization": f"Bearer {patient_token}"
-        }
+        headers=auth(patient_token)
     )
 
     assert response.status_code == 201
@@ -39,19 +42,17 @@ async def test_create_payment_success(
 
 @pytest.mark.asyncio
 async def test_payment_invalid_consultation(
-    async_client,
-    patient_token
+        async_client,
+        patient_token
 ):
     response = await async_client.post(
         "/payments/",
         json={
             "consultation_id": "00000000-0000-0000-0000-000000000000",
             "amount": 1000,
-            "idempotency_key": "payment-test-1"
+            "idempotency_key": str(uuid.uuid4())
         },
-        headers={
-            "Authorization": f"Bearer {patient_token}"
-        }
+        headers=auth(patient_token)
     )
 
     assert response.status_code in (400, 404)
@@ -63,20 +64,18 @@ async def test_payment_invalid_consultation(
 
 @pytest.mark.asyncio
 async def test_doctor_cannot_create_payment(
-    async_client,
-    doctor_token,
-    consultation_id
+        async_client,
+        doctor_token,
+        consultation_id
 ):
     response = await async_client.post(
         "/payments/",
         json={
             "consultation_id": consultation_id,
             "amount": 1000,
-            "idempotency_key": "payment-test-1"
+            "idempotency_key": str(uuid.uuid4())
         },
-        headers={
-            "Authorization": f"Bearer {doctor_token}"
-        }
+        headers=auth(doctor_token)
     )
 
     assert response.status_code == 404
@@ -88,22 +87,19 @@ async def test_doctor_cannot_create_payment(
 
 @pytest.mark.asyncio
 async def test_completed_payment_is_immutable(
-    async_client,
-    patient_token,
-    consultation_id
+        async_client,
+        patient_token,
+        consultation_id
 ):
-
     # Step 1: Create Payment
     create = await async_client.post(
         "/payments/",
         json={
             "consultation_id": consultation_id,
             "amount": 1000,
-            "idempotency_key": "payment-test-immutable"
+            "idempotency_key": str(uuid.uuid4())
         },
-        headers={
-            "Authorization": f"Bearer {patient_token}"
-        }
+        headers=auth(patient_token)
     )
 
     assert create.status_code == 201
@@ -143,9 +139,7 @@ async def test_completed_payment_is_immutable(
     # Step 4: Attempt Refund (patient should fail)
     refund = await async_client.post(
         f"/payments/{payment_id}/refund",
-        headers={
-            "Authorization": f"Bearer {patient_token}"
-        }
+        headers=auth(patient_token)
     )
 
     assert refund.status_code == 403
@@ -157,22 +151,19 @@ async def test_completed_payment_is_immutable(
 
 @pytest.mark.asyncio
 async def test_admin_can_refund_successful_payment(
-    async_client,
-    patient_token,
-    admin_token,
-    consultation_id
+        async_client,
+        patient_token,
+        admin_token,
+        consultation_id
 ):
-    # Step 1: Create payment
     create = await async_client.post(
         "/payments/",
         json={
             "consultation_id": consultation_id,
             "amount": 1000,
-            "idempotency_key": "admin-refund-test"
+            "idempotency_key": str(uuid.uuid4())
         },
-        headers={
-            "Authorization": f"Bearer {patient_token}"
-        }
+        headers=auth(patient_token)
     )
 
     assert create.status_code == 201
@@ -181,7 +172,6 @@ async def test_admin_can_refund_successful_payment(
     payment_id = data["id"]
     provider_reference = data["provider_reference"]
 
-    # Step 2: Move to authorized
     await async_client.post(
         "/payments/webhook",
         json={
@@ -190,7 +180,6 @@ async def test_admin_can_refund_successful_payment(
         }
     )
 
-    # Step 3: Move to succeeded
     await async_client.post(
         "/payments/webhook",
         json={
@@ -199,13 +188,80 @@ async def test_admin_can_refund_successful_payment(
         }
     )
 
-    # Step 4: Admin refund
     refund = await async_client.post(
         f"/payments/{payment_id}/refund",
-        headers={
-            "Authorization": f"Bearer {admin_token}"
-        }
+        headers=auth(admin_token)
     )
 
     assert refund.status_code == 200
     assert refund.json()["status"] == "refunded"
+
+
+# -----------------------------------------
+# Idempotency Test
+# -----------------------------------------
+
+@pytest.mark.asyncio
+async def test_payment_idempotency(
+        async_client,
+        patient_token,
+        consultation_id
+):
+    key = str(uuid.uuid4())
+
+    payload = {
+        "consultation_id": consultation_id,
+        "amount": 1000,
+        "idempotency_key": key
+    }
+
+    first = await async_client.post(
+        "/payments/",
+        json=payload,
+        headers=auth(patient_token)
+    )
+
+    second = await async_client.post(
+        "/payments/",
+        json=payload,
+        headers=auth(patient_token)
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+
+    assert first.json()["id"] == second.json()["id"]
+
+
+# -----------------------------------------
+# Invalid State Transition
+# -----------------------------------------
+
+@pytest.mark.asyncio
+async def test_invalid_payment_transition(
+        async_client,
+        patient_token,
+        consultation_id
+):
+    create = await async_client.post(
+        "/payments/",
+        json={
+            "consultation_id": consultation_id,
+            "amount": 1000,
+            "idempotency_key": str(uuid.uuid4())
+        },
+        headers=auth(patient_token)
+    )
+
+    provider_reference = create.json()["provider_reference"]
+
+    # Attempt invalid transition
+    response = await async_client.post(
+        "/payments/webhook",
+        json={
+            "provider_reference": provider_reference,
+            "status": "succeeded"
+        }
+    )
+
+    assert response.status_code == 400

@@ -3,7 +3,7 @@ from fastapi import HTTPException, Depends
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.modules.auth.dependencies import get_current_user
+from app.core.retry import retry_with_backoff
 from app.modules.consultations.models import Consultation
 from app.modules.payments.models import Payment, PaymentStatus
 from app.modules.users.models import User
@@ -95,42 +95,48 @@ class PaymentService:
             provider_reference: str,
             new_status: PaymentStatus
     ):
+        def _update():
+            payment = db.query(Payment).filter(
+                Payment.provider_reference == provider_reference
+            ).with_for_update().first()
 
-        payment = db.query(Payment).filter(
-            Payment.provider_reference == provider_reference
-        ).first()
+            if not payment:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Payment not found"
+                )
 
-        if not payment:
-            raise HTTPException(
-                status_code=404,
-                detail="Payment not found"
-            )
+            # Webhook idempotency protection
+            if payment.status == new_status:
+                return payment
 
-        valid_transitions = {
-            PaymentStatus.pending: [
-                PaymentStatus.authorized,
-                PaymentStatus.failed
-            ],
-            PaymentStatus.authorized: [
-                PaymentStatus.succeeded,
-                PaymentStatus.failed
-            ],
-            PaymentStatus.succeeded: [
-                PaymentStatus.refunded
-            ]
-        }
+            valid_transitions = {
+                PaymentStatus.pending: [
+                    PaymentStatus.authorized,
+                    PaymentStatus.failed
+                ],
+                PaymentStatus.authorized: [
+                    PaymentStatus.succeeded,
+                    PaymentStatus.failed
+                ],
+                PaymentStatus.succeeded: [
+                    PaymentStatus.refunded
+                ]
+            }
 
-        if new_status not in valid_transitions.get(payment.status, []):
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid payment state transition"
-            )
+            if new_status not in valid_transitions.get(payment.status, []):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid payment state transition"
+                )
 
-        payment.status = new_status
-        db.commit()
-        db.refresh(payment)
+            payment.status = new_status
+            db.commit()
+            db.refresh(payment)
 
-        return payment
+            return payment
+        return retry_with_backoff(_update)
+
 
     @staticmethod
     def refund_payment(
