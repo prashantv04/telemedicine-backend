@@ -544,5 +544,3 @@ For local (non-Docker) development, adjust `DATABASE_URL` accordingly.
 
 # 📸 API Preview
 ![Swagger UI](/docs/screenshots/swagger.jpg)
-
-````
