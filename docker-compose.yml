@@ -16,6 +16,7 @@ services:
   postgres:
     image: postgres:15
     container_name: telemedicine_postgres
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

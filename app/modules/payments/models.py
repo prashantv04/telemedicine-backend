@@ -1,11 +1,13 @@
 import uuid
 import enum
 from decimal import Decimal
-from sqlalchemy import String, ForeignKey, Numeric, DateTime, Enum, UniqueConstraint
+
+from sqlalchemy import String, ForeignKey, Numeric, Enum, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, Mapped, mapped_column
-from sqlalchemy.sql import func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
+from app.db.models.base_model import BaseModelMixin
 
 
 class PaymentStatus(str, enum.Enum):
@@ -16,23 +18,8 @@ class PaymentStatus(str, enum.Enum):
     refunded = "refunded"
 
 
-class Payment(Base):
+class Payment(Base, BaseModelMixin):
     __tablename__ = "payments"
-
-    __table_args__ = (
-        # Prevent double successful payment per consultation
-        UniqueConstraint(
-            "consultation_id",
-            "status",
-            name="uq_consultation_success",
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
 
     consultation_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -68,29 +55,15 @@ class Payment(Base):
 
     idempotency_key: Mapped[str] = mapped_column(
         String,
-        nullable=False,
         unique=True,
+        nullable=False,
         index=True,
     )
 
-    provider_reference: Mapped[str] = mapped_column(
+    provider_reference: Mapped[str | None] = mapped_column(
         String,
         nullable=True,
         index=True
     )
 
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-
-    updated_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-    )
-
     consultation = relationship("Consultation")
-    patient = relationship("User")

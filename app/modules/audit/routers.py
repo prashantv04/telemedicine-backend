@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.modules.audit.models import AuditLog
 
-router = APIRouter(prefix="/audit", tags=["audit"])
+router = APIRouter(prefix="/audit", tags=["Audit"])
 
 @router.get("/")
 def list_logs(db: Session = Depends(get_db)):

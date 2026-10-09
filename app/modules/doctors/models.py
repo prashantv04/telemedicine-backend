@@ -1,18 +1,14 @@
 import uuid
 from sqlalchemy import String, Boolean, ForeignKey, Numeric
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from app.db.base import Base
+from app.db.models.base_model import BaseModelMixin
 
 
-class Doctor(Base):
+class Doctor(Base, BaseModelMixin):
     __tablename__ = "doctors"
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -22,24 +18,33 @@ class Doctor(Base):
         index=True,
     )
 
-    specialization: Mapped[str] = mapped_column(
-        String, nullable=True
-    )
-
-    license_number: Mapped[str] = mapped_column(
-        String, unique=True, nullable=True
-    )
-
-    years_of_experience: Mapped[int] = mapped_column(
+    specialization: Mapped[str | None] = mapped_column(
+        String,
         nullable=True
     )
-    
-    consultation_fee: Mapped[float] = mapped_column(
-        Numeric(10, 2), nullable=True
+
+    license_number: Mapped[str | None] = mapped_column(
+        String,
+        unique=True,
+        nullable=True
+    )
+
+    years_of_experience: Mapped[int | None] = mapped_column(
+        nullable=True
+    )
+
+    consultation_fee: Mapped[float | None] = mapped_column(
+        Numeric(10, 2),
+        nullable=True
     )
 
     is_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False
+        Boolean,
+        default=False
     )
 
-    user = relationship("User", backref="doctor_profile", uselist=False)
+    user = relationship(
+        "User",
+        backref="doctor_profile",
+        uselist=False
+    )

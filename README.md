@@ -110,14 +110,85 @@ Background Tasks (notifications / async jobs)
 
 # 🎯 Performance Targets
 
-| Metric                   | Target    |
-|--------------------------|-----------|
-| Daily Consultation Capacity | 100,000+  |
-| p95 Read Latency         | < 200ms   |
-| p95 Write Latency        | < 500ms   |
-| Availability Goal        | 99.95%    |
+The system is designed to support high booking concurrency while maintaining low API latency and transactional consistency.
 
-Designed for high booking concurrency during peak consultation windows.
+| Metric | Target |
+|---|---:|
+| Daily Consultation Capacity | 100,000+ |
+| p95 Read Latency | < 200 ms |
+| p95 Write Latency | < 500 ms |
+| Availability Goal | 99.95% |
+
+These are design targets; production capacity and availability require validation in a production-like environment.
+
+## 🚀 Load Testing & Performance Validation
+
+To evaluate API latency and concurrency behavior, the system was stress-tested using [Locust](https://locust.io/). The test focused on the booking and consultation-search endpoints.
+
+### Testing Environment
+
+- **Hardware:** Intel Core i5 (13th Gen), NVMe SSD
+- **Deployment:** Local Docker Engine (single node)
+- **Test duration:** 2 minutes
+- **Concurrent users:** 150 virtual users (VUs)
+- **Test setup:** FastAPI, PostgreSQL, and the Locust load generator running on the same host
+
+### Database & Connection Pool Configuration
+
+| Setting | Value |
+|---|---:|
+| PostgreSQL `max_connections` | 300 |
+| SQLAlchemy `pool_size` | 50 |
+| SQLAlchemy `max_overflow` | 100 |
+
+These settings were used for the benchmark. Actual throughput and connection queueing depend on workload characteristics, database resources, and contention.
+
+### Locust Test Results
+
+The following response-time percentiles are reported by Locust and are approximate.
+
+| Method | Endpoint | p50 | p90 | p95 | p99 | p99.9 | Max | Requests |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| POST | `/bookings` | 14 ms | 26 ms | 32 ms | 64 ms | 100 ms | 130 ms | 1,930 |
+| GET | `/consultations/search?page=1&limit=20` | 10 ms | 20 ms | 28 ms | 53 ms | 100 ms | 120 ms | 5,960 |
+| **Aggregated** | **All endpoints** | **11 ms** | **22 ms** | **29 ms** | **57 ms** | **100 ms** | **130 ms** | **7,890** |
+
+### Results vs. Performance Targets
+
+| Metric | Observed Result | Target | Result |
+|---|---:|---:|---|
+| Read latency (p95) | 28 ms | < 200 ms | Within target |
+| Write latency (p95) | 32 ms | < 500 ms | Within target |
+| Total requests | 7,890 | — | — |
+| Booking requests | 1,930 | — | — |
+| Search requests | 5,960 | — | — |
+
+### Benchmark Summary
+
+During the two-minute test, Locust recorded **7,890 requests** across the booking and consultation-search endpoints.
+
+- **Booking:** p95 response time of 32 ms, with a maximum observed response time of 130 ms.
+- **Consultation search:** p95 response time of 28 ms, with a maximum observed response time of 120 ms.
+- **Aggregated:** p95 response time of 29 ms across both endpoints.
+
+Both endpoints remained below their respective p95 latency targets in this test environment.
+
+### Concurrency & Transactional Correctness
+
+Booking operations use PostgreSQL transactional guarantees to prevent conflicting slot allocations under concurrent requests:
+
+- **Row-level locking:** `SELECT ... FOR UPDATE` serializes competing transactions attempting to allocate the same availability slot.
+- **Database constraints:** Unique constraints help enforce booking and idempotency invariants.
+- **Atomic transactions:** Slot allocation and consultation creation are performed within a transaction.
+- **Idempotent writes:** Repeated requests using the same idempotency key do not create duplicate bookings.
+
+These mechanisms prioritize transactional correctness when multiple patients attempt to book the same slot.
+
+### Benchmark Limitations
+
+These results represent a local, single-node benchmark and do not independently establish production capacity of 100,000 daily consultations or 99.95% availability. Production validation would require longer sustained-load tests, realistic booking-contention scenarios, resource utilization measurements, failure-recovery testing, and multi-instance deployment tests.
+
+The supplied Locust output does not include a failure count, so an error rate is not claimed here.
 
 ---
 
@@ -473,3 +544,5 @@ For local (non-Docker) development, adjust `DATABASE_URL` accordingly.
 
 # 📸 API Preview
 ![Swagger UI](/docs/screenshots/swagger.jpg)
+
+````

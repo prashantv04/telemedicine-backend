@@ -3,6 +3,8 @@ import time
 import uuid
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
+
+from app.core.context import request_context
 from app.db.base import Base
 from app.db.session import engine
 from sqlalchemy.exc import OperationalError
@@ -81,30 +83,51 @@ app.add_middleware(SlowAPIMiddleware)
 # -----------------------------
 # AUDIT LOGGING MIDDLEWARE
 # -----------------------------
-
 @app.middleware("http")
 async def audit_log_middleware(request: Request, call_next):
+
+    # --- 1. Extract metadata ---
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        ip_address = forwarded_for.split(",")[0].strip()
+    else:
+        ip_address = request.client.host if request.client else None
+
+    user_agent = request.headers.get("user-agent")
+
+    request_id = str(uuid.uuid4())
+
+    # 2. Store in context (correct timing)
+    request_context.set({
+        "ip_address": ip_address,
+        "user_agent": user_agent,
+        "request_id": request_id,
+    })
+
+    # --- 3. Process request ---
     response = await call_next(request)
 
-    db: Session = SessionLocal()
-    try:
-        user_id = getattr(request.state, "user_id", None)  # set in JWT auth
+    # --- 4. Get user_id (optional, only for logging)
+    user_id = getattr(request.state, "user_id", None)
 
-        log = AuditLog(
-            user_id=user_id or uuid.UUID(int=0),  # if unknown, use null UUID
-            action=request.method + " " + request.url.path,  # e.g., "GET /consultations/search"
-            entity_type=None,       # optionally fill based on endpoint
-            entity_id=None,         # optionally fill based on request body or URL
-            event_data=json.dumps({
-                "status_code": response.status_code,
-                "query_params": dict(request.query_params)
-            })
-        )
-
-        db.add(log)
-        db.commit()
-    finally:
-        db.close()
+    # --- 5. Audit log ---
+    if user_id:
+        db: Session = SessionLocal()
+        try:
+            log = AuditLog(
+                user_id=user_id,
+                action=f"{request.method} {request.url.path}",
+                event_data={
+                    "status_code": response.status_code,
+                    "query_params": dict(request.query_params)
+                },
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
+            db.add(log)
+            db.commit()
+        finally:
+            db.close()
 
     return response
 

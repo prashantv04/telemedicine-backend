@@ -1,24 +1,51 @@
-from fastapi import APIRouter, Depends
-from app.modules.users.models import User
-from app.modules.auth.dependencies import get_current_user
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
+from typing import List
 
+from app.modules.users.models import User
+from app.modules.users.schemas import UserResponse, DoctorResponse
+from app.modules.auth.dependencies import get_current_user
 from app.api.deps import get_db
 
-router = APIRouter(prefix="/users", tags=["Users"])
 
-@router.get("/me")
-def get_me(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "role": current_user.role,
-        "is_active": current_user.is_active,
-        "mfa_enabled": current_user.mfa_enabled,
-        "created_at": current_user.created_at,
-        "updated_at": current_user.updated_at
-    }
+router = APIRouter(
+    prefix="/users", tags=["Users"]
+)
 
-@router.get("/doctors")
-def list_doctors(db: Session = Depends(get_db)):
-    return db.query(User).filter(User.role == "doctor").all()
+
+@router.get(
+    "/me",
+    response_model=UserResponse,
+    status_code=status.HTTP_200_OK
+)
+def get_me(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get current authenticated user profile.
+    """
+
+    return current_user
+
+
+@router.get(
+    "/doctors",
+    response_model=List[DoctorResponse],
+    status_code=status.HTTP_200_OK
+)
+def list_doctors(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db)
+):
+    """
+    List doctors available on the platform.
+    """
+
+    return (
+        db.query(User)
+        .filter(User.role == "doctor")
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )

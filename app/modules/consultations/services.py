@@ -1,13 +1,14 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from fastapi import HTTPException
 from uuid import UUID
-
 from typing import Optional, List
 from datetime import datetime
-from app.modules.audit.models import AuditLog
 
+from app.modules.audit.models import AuditLog
 from app.modules.consultations.models import Consultation
 from app.modules.users.models import User
+from app.modules.bookings.models import Booking
+from app.modules.availability.models import AvailabilitySlot
 
 
 VALID_TRANSITIONS = {
@@ -16,18 +17,20 @@ VALID_TRANSITIONS = {
     "cancelled": [],
 }
 
+
 def get_user_consultations(db: Session, user_id: UUID, role: str):
+    query = db.query(Consultation)
+
     if role == "patient":
-        return db.query(Consultation).filter(
-            Consultation.patient_id == user_id
-        ).all()
+        query = query.filter(Consultation.patient_id == user_id)
 
-    if role == "doctor":
-        return db.query(Consultation).filter(
-            Consultation.doctor_id == user_id
-        ).all()
+    elif role == "doctor":
+        query = query.filter(Consultation.doctor_id == user_id)
 
-    return []
+    else:
+        return []
+
+    return query.order_by(Consultation.created_at.desc()).all()
 
 
 def update_consultation_status(
@@ -38,34 +41,78 @@ def update_consultation_status(
     user_id: UUID,
     role: str
 ):
-    consultation = db.query(Consultation).filter(
-        Consultation.id == consultation_id
-    ).first()
+    # Row lock to avoid concurrent updates
+    consultation = (
+        db.query(Consultation)
+        .filter(Consultation.id == consultation_id)
+        .with_for_update()
+        .first()
+    )
 
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
 
-    # Validate state transition
+    # Validate transition
     allowed = VALID_TRANSITIONS.get(consultation.status, [])
 
-    if new_status not in allowed:
-        raise HTTPException(status_code=400, detail="Invalid status transition")
+    # if new_status not in allowed:
+    #     raise HTTPException(status_code=400, detail="Invalid status transition")
 
+    if consultation.status != "scheduled":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Consultation already {consultation.status} and cannot be modified"
+        )
+
+    # -------------------------
     # RBAC
+    # -------------------------
     if role == "doctor":
         if consultation.doctor_id != user_id:
             raise HTTPException(status_code=403, detail="Not your consultation")
+
         if new_status != "completed":
-            raise HTTPException(status_code=400, detail="Doctor can only complete consultation")
+            raise HTTPException(
+                status_code=400,
+                detail="Doctor can only complete consultation"
+            )
 
     if role == "patient":
         if consultation.patient_id != user_id:
             raise HTTPException(status_code=403, detail="Not your consultation")
-        if new_status != "cancelled":
-            raise HTTPException(status_code=400, detail="Patient can only cancel consultation")
 
+        if new_status != "cancelled":
+            raise HTTPException(
+                status_code=400,
+                detail="Patient can only cancel consultation"
+            )
+
+    # -------------------------
+    # Update Status
+    # -------------------------
     consultation.status = new_status
 
+    # -------------------------
+    # Release Slot If Cancelled
+    # -------------------------
+    if new_status == "cancelled":
+
+        booking = db.query(Booking).filter(
+            Booking.id == consultation.booking_id
+        ).first()
+
+        if booking:
+            slot = db.query(AvailabilitySlot).filter(
+                AvailabilitySlot.id == booking.slot_id
+            ).first()
+
+            if slot:
+                slot.status = "available"
+                slot.reserved_until = None
+
+    # -------------------------
+    # Audit Log
+    # -------------------------
     audit = AuditLog(
         user_id=user_id,
         action="CONSULTATION_STATUS_UPDATED",
@@ -75,10 +122,12 @@ def update_consultation_status(
     )
 
     db.add(audit)
+
     db.commit()
     db.refresh(consultation)
 
     return consultation
+
 
 def search_consultations(
     db: Session,
@@ -91,20 +140,14 @@ def search_consultations(
     page: int = 1,
     limit: int = 20,
 ) -> List[Consultation]:
-    """
-    Secure consultation search with strict RBAC and pagination.
 
-    Role Rules:
-    - patient → can ONLY see their own consultations
-    - doctor  → can ONLY see their own consultations
-    - admin   → can see all consultations and apply filters
-    """
-
-    query = db.query(Consultation)
-
-    # -------------------------------
-    # BASE ACCESS CONTROL (RBAC)
-    # -------------------------------
+    query = (
+        db.query(Consultation)
+        .options(joinedload(Consultation.booking))
+    )
+    # -------------------------
+    # RBAC
+    # -------------------------
     if current_user.role == "patient":
         query = query.filter(Consultation.patient_id == current_user.id)
 
@@ -112,25 +155,25 @@ def search_consultations(
         query = query.filter(Consultation.doctor_id == current_user.id)
 
     elif current_user.role == "admin":
-        # Admin has full visibility
         pass
 
     else:
         raise HTTPException(status_code=403, detail="Unauthorized role")
 
-    # -------------------------------
-    # ADMIN FILTERS
-    # -------------------------------
+    # -------------------------
+    # Admin Filters
+    # -------------------------
     if current_user.role == "admin":
+
         if doctor_id:
             query = query.filter(Consultation.doctor_id == doctor_id)
 
         if patient_id:
             query = query.filter(Consultation.patient_id == patient_id)
 
-    # -------------------------------
-    # OPTIONAL FILTERS
-    # -------------------------------
+    # -------------------------
+    # Optional Filters
+    # -------------------------
     if status:
         query = query.filter(Consultation.status == status)
 
@@ -140,14 +183,24 @@ def search_consultations(
     if date_to:
         query = query.filter(Consultation.created_at <= date_to)
 
-    # -------------------------------
-    # ORDERING
-    # -------------------------------
+
+    total = query.count()
+    # -------------------------
+    # Ordering
+    # -------------------------
     query = query.order_by(Consultation.created_at.desc())
 
-    # -------------------------------
-    # PAGINATION
-    # -------------------------------
+    # -------------------------
+    # Pagination
+    # -------------------------
+
     offset = (page - 1) * limit
 
-    return query.offset(offset).limit(limit).all()
+    items = query.offset(offset).limit(limit).all()
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "limit": limit,
+    }

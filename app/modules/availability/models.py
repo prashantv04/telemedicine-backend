@@ -1,59 +1,60 @@
 import uuid
-from sqlalchemy import Column, DateTime, Boolean, ForeignKey, Index
+from datetime import datetime
+from sqlalchemy import String, DateTime, ForeignKey, Index
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.sql import func
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.models.base_model import BaseModelMixin
+
+from enum import Enum
+
+class AvailabilityStatus(str, Enum):
+    available = "available"
+    booked = "booked"
+    cancelled = "cancelled"
 
 
-class AvailabilitySlot(Base):
+class AvailabilitySlot(Base, BaseModelMixin):
     __tablename__ = "availability_slots"
 
-    id = Column(
-        UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid.uuid4
-    )
-
-    doctor_id = Column(
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
 
-    start_time = Column(
+    start_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False
     )
 
-    end_time = Column(
+    end_time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False
     )
 
-    is_booked = Column(
-        Boolean, default=False,
-        nullable=False
-    )
-
-    created_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
+    status: Mapped[str] = mapped_column(
+        String,
+        default=AvailabilityStatus.available,
         nullable=False,
+        index=True
     )
 
-    updated_at = Column(
+    reserved_until: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
+        nullable=True
     )
 
     doctor = relationship("User")
 
+    booking = relationship("Booking", uselist=False, overlaps="slot")
+
+    @property
+    def is_booked(self) -> bool:
+        return self.status == AvailabilityStatus.booked
+
     __table_args__ = (
         Index("ix_doctor_start_time", "doctor_id", "start_time"),
-        # Index("ix_slot_time_range", "start_time", "end_time"),
     )

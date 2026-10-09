@@ -1,11 +1,14 @@
 import uuid
-from fastapi import HTTPException, Depends
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.retry import retry_with_backoff
 from app.modules.consultations.models import Consultation
+from app.modules.bookings.models import Booking
+from app.modules.availability.models import AvailabilitySlot
 from app.modules.payments.models import Payment, PaymentStatus
+from app.modules.audit.models import AuditLog
 from app.modules.users.models import User
 
 
@@ -19,10 +22,10 @@ class PaymentService:
         data
     ):
         """
-        Idempotent payment creation with proper business validation.
+        Idempotent payment creation with business validation.
         """
 
-        # Idempotency check
+        # --- 1. Idempotency check ---
         existing = db.query(Payment).filter(
             Payment.idempotency_key == data.idempotency_key
         ).first()
@@ -30,11 +33,16 @@ class PaymentService:
         if existing:
             return existing
 
-        # Validate consultation ownership
-        consultation = db.query(Consultation).filter(
-            Consultation.id == data.consultation_id,
-            Consultation.patient_id == patient_id
-        ).first()
+        # --- 2. Lock consultation ---
+        consultation = (
+            db.query(Consultation)
+            .filter(
+                Consultation.id == data.consultation_id,
+                Consultation.patient_id == patient_id
+            )
+            .with_for_update()
+            .first()
+        )
 
         if not consultation:
             raise HTTPException(
@@ -42,9 +50,15 @@ class PaymentService:
                 detail="Consultation not found"
             )
 
-        # Check if already paid
+        if consultation.status != "scheduled":
+            raise HTTPException(
+                status_code=400,
+                detail="Payment only allowed for scheduled consultations"
+            )
+
+        # --- 3. Prevent duplicate successful payments ---
         already_paid = db.query(Payment).filter(
-            Payment.consultation_id == data.consultation_id,
+            Payment.consultation_id == consultation.id,
             Payment.status == PaymentStatus.succeeded
         ).first()
 
@@ -54,15 +68,15 @@ class PaymentService:
                 detail="Consultation already paid"
             )
 
-        # Create new payment attempt
+        # --- 4. Create payment attempt ---
         payment = Payment(
-            consultation_id=data.consultation_id,
+            consultation_id=consultation.id,
             patient_id=patient_id,
             amount=data.amount,
             currency=data.currency,
             status=PaymentStatus.pending,
             idempotency_key=data.idempotency_key,
-            provider_reference = str(uuid.uuid4())
+            provider_reference=str(uuid.uuid4())
         )
 
         db.add(payment)
@@ -75,7 +89,6 @@ class PaymentService:
         except IntegrityError:
             db.rollback()
 
-            # Handle idempotency race condition
             existing = db.query(Payment).filter(
                 Payment.idempotency_key == data.idempotency_key
             ).first()
@@ -90,15 +103,19 @@ class PaymentService:
 
     @staticmethod
     def update_status_from_webhook(
-            db: Session,
-            *,
-            provider_reference: str,
-            new_status: PaymentStatus
+        db: Session,
+        *,
+        provider_reference: str,
+        new_status: PaymentStatus
     ):
         def _update():
-            payment = db.query(Payment).filter(
-                Payment.provider_reference == provider_reference
-            ).with_for_update().first()
+
+            payment = (
+                db.query(Payment)
+                .filter(Payment.provider_reference == provider_reference)
+                .with_for_update()
+                .first()
+            )
 
             if not payment:
                 raise HTTPException(
@@ -106,7 +123,7 @@ class PaymentService:
                     detail="Payment not found"
                 )
 
-            # Webhook idempotency protection
+            # Idempotent webhook
             if payment.status == new_status:
                 return payment
 
@@ -131,12 +148,50 @@ class PaymentService:
                 )
 
             payment.status = new_status
+
+            # --- Update slot state ---
+            consultation = db.query(Consultation).filter(
+                Consultation.id == payment.consultation_id
+            ).first()
+
+            if consultation:
+
+                booking = db.query(Booking).filter(
+                    Booking.id == consultation.booking_id
+                ).first()
+
+                if booking:
+
+                    slot = db.query(AvailabilitySlot).filter(
+                        AvailabilitySlot.id == booking.slot_id
+                    ).first()
+
+                    if slot:
+
+                        if new_status == PaymentStatus.succeeded:
+                            slot.status = "booked"
+
+                        if new_status == PaymentStatus.failed:
+                            slot.status = "available"
+                            slot.reserved_until = None
+
+            # --- Audit log ---
+            audit = AuditLog(
+                user_id=payment.patient_id,
+                action="PAYMENT_STATUS_UPDATED",
+                entity_type="payment",
+                entity_id=str(payment.id),
+                event_data=f"new_status={new_status}"
+            )
+
+            db.add(audit)
+
             db.commit()
             db.refresh(payment)
 
             return payment
-        return retry_with_backoff(_update)
 
+        return retry_with_backoff(_update)
 
     @staticmethod
     def refund_payment(
@@ -146,7 +201,7 @@ class PaymentService:
         current_user: User
     ):
         payment = db.query(Payment).filter(
-            Payment.id == payment_id
+            Payment.patient_id == payment_id
         ).first()
 
         if not payment:
@@ -155,14 +210,15 @@ class PaymentService:
                 detail="Payment not found"
             )
 
-        # ADMIN CHECK
+        if payment.status != "succeeded":
+            raise HTTPException(status_code=400, detail="Only succeeded payments can be refunded")
+
         if current_user.role != "admin":
             raise HTTPException(
                 status_code=403,
                 detail="Only admin can refund payments"
             )
 
-        # Only succeeded payments can be refunded
         if payment.status != PaymentStatus.succeeded:
             raise HTTPException(
                 status_code=400,
@@ -170,6 +226,17 @@ class PaymentService:
             )
 
         payment.status = PaymentStatus.refunded
+
+        audit = AuditLog(
+            user_id=current_user.id,
+            action="PAYMENT_REFUNDED",
+            entity_type="payment",
+            entity_id=str(payment.id),
+            event_data="refund_processed"
+        )
+
+        db.add(audit)
+
         db.commit()
         db.refresh(payment)
 
