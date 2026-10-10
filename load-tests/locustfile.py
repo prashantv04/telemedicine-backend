@@ -53,13 +53,13 @@ class TelemedicineUser(HttpUser):
                 response.failure(f"Write failed: {response.status_code}")
 
 
-# ==============================================================
-# 🎯 AUTOMATED METRICS ENFORCEMENT (PROVES YOUR README CLAIMS)
-# ==============================================================
+
+# AUTOMATED METRICS ENFORCEMENT
+
 @events.quitting.add_listener
 def assert_performance_metrics(environment, **kwargs):
     if environment.stats.total.fail_ratio > 0.0005:
-        print(f"❌ FAIL: Failure rate is {environment.stats.total.fail_ratio * 100}%. (Target: < 0.05%)")
+        print(f" FAIL: Failure rate is {environment.stats.total.fail_ratio * 100}%. (Target: < 0.05%)")
         environment.process_exit_code = 1
 
     # Loop through endpoints and check latencies
@@ -67,12 +67,12 @@ def assert_performance_metrics(environment, **kwargs):
         p95 = stats.get_response_time_percentile(0.95)
 
         if method == "GET" and p95 > 200:
-            print(f"❌ FAIL: Read latency p95 is {p95}ms. (Target: < 200ms)")
+            print(f" FAIL: Read latency p95 is {p95}ms. (Target: < 200ms)")
             environment.process_exit_code = 1
 
         elif method == "POST" and p95 > 500:
-            print(f"❌ FAIL: Write latency p95 is {p95}ms. (Target: < 500ms)")
+            print(f" FAIL: Write latency p95 is {p95}ms. (Target: < 500ms)")
             environment.process_exit_code = 1
 
     if environment.process_exit_code == 0:
-        print("✅ SUCCESS: All performance metrics passed constraints!")
+        print("SUCCESS: All performance metrics passed constraints!")
